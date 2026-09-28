@@ -26,6 +26,19 @@ In Malaysia, it is humidity — not just temperature — that makes heat deadly.
 
 ---
 
+## Features
+
+- **Hour-by-hour WBGT timeline** — 48-hour colour-coded heat-stress forecast
+- **6 outdoor profiles** — Delivery Rider, Construction, School, Runner, Elderly, Tourist
+- **Right-now card** — current WBGT, work/rest recommendation, hydration reminder
+- **Best windows** — longest safe consecutive block for today and tomorrow
+- **Plan My Shift** — enter shift start/end time; get per-hour break schedule and total water needed
+- **Shareable URL** — all settings (city, profile, toggles, shift times) encoded in the URL; share the exact view via WhatsApp
+- **WhatsApp share** — one-tap message a supervisor or teacher can forward to their whole group
+- **No install, no keys, no backend** — a single HTML file, works offline after first load
+
+---
+
 ## How It Works
 
 ```

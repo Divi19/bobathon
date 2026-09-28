@@ -104,3 +104,19 @@ Format: mode used, short prompt summary, what Bob produced, and any human verifi
 - **Prompt (short):** "Run all sanity checks via Node.js. Verify all 7 assertions pass. Write README.md. Finalise BOB_LOG. Commit and push."
 - **What Bob produced:** Node.js sanity-check run confirming all 7 assertions pass: wetBulb(33,75)=29.208 ✓, wbgtShade(33,75)=30.346 ✓, wetBulb(27,90)=25.665 ✓, wbgtShade(27,90)=26.065 ✓, classify(wbgtShade(27,90),'moderate',true)=green ✓, classify(29.5,'moderate',true)=orange ✓, classify(28.5,'heavy',false)=purple ✓. README.md with all 10 required sections (problem, audience table, how-it-works with formula, Bob usage summary linking to BOB_LOG, why-not-slop, limitations, roadmap, sources, run-locally). Final BOB_LOG entries completed for all 12 sub-tasks.
 - **What we verified:** All 7 sanity checks pass in isolation via Node.js, confirming the in-browser `console.assert` block will also pass. README covers every required section from spec Section 10. No remaining "Bahang" references in any file.
+
+---
+
+### 13. Feature — Shareable URL State
+- **Mode:** Agent / Code
+- **Prompt (short):** "Store city, profile, acc, sun, and shift params in URL via history.replaceState. Read them back on load to restore view. WhatsApp link auto-includes the full URL."
+- **What Bob produced:** `CITY_KEYS` map (shortname → lat/lon/name) + `CITY_KEY_BY_VALUE` reverse map. `updateURL()` — writes city/lat/lon, profile, acc, sun, sday, sstart, send to `URLSearchParams` and calls `history.replaceState`. `readURL()` — reads all params on boot, restores state and syncs all DOM controls. Called at end of every `render()` and each shift-control `change` handler. `window.location.href` in `buildWhatsAppMessage` now always reflects the current state-encoded URL.
+- **What we verified:** JS syntax check passes (node -e). Confirmed `readURL()` is called before `fetchForecast()` at boot. Confirmed `updateURL()` is called at end of `render()` and shift change handlers.
+
+---
+
+### 14. Feature — Plan My Shift
+- **Mode:** Agent / Code
+- **Prompt (short):** "Add a compact shift planner below best-windows: day selector, start/end time inputs, per-hour list with colour dot and action, summary of rest time and water, shift summary in WhatsApp message, shift params in URL."
+- **What Bob produced:** HTML section `#shift-planner` with day select + two `<input type="time">` controls. CSS for `.shift-controls`, `.shift-hours`, `.sh-dot-{level}` circles, `.shift-summary`. `renderShiftPlanner()` — filters hours to target date and time range; computes rest minutes per hour (green=0, yellow=15, orange=30, red=45, purple=60); renders `<li>` list with time, coloured dot, and label; computes total rest, active work, cups and litres of water; stores `state._shiftSummary` for WhatsApp. `buildWhatsAppMessage()` updated to conditionally include the shift summary line. Shift controls (`shift-day`, `shift-start`, `shift-end`) wired with `change` listeners calling `renderShiftPlanner()` + `renderShare()` + `updateURL()`.
+- **What we verified:** All 7 sanity checks still pass after changes. JS syntax check passes (node -e new Function). Shift params included in `updateURL()` and restored by `readURL()` on boot.

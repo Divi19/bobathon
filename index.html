@@ -226,6 +226,58 @@
     .tl-cell.active .tl-tooltip { display: block; }
 
     /* ── Best windows ────────────────────────────────── */
+    /* ── Shift planner ───────────────────────────────────────── */
+    #shift-planner {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+      background: var(--surface);
+    }
+    .shift-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 12px;
+    }
+    .shift-controls .control-group { flex: 1 1 100px; }
+    .shift-controls input[type="time"], .shift-controls select {
+      height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: .9rem;
+      padding: 0 8px;
+      width: 100%;
+    }
+    .shift-hours { list-style: none; font-size: .85rem; }
+    .shift-hours li {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .shift-hours li:last-child { border-bottom: none; }
+    .shift-hours .sh-time { font-weight: 600; flex: 0 0 48px; }
+    .shift-hours .sh-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .sh-dot-green  { background: var(--c-green); }
+    .sh-dot-yellow { background: var(--c-yellow); }
+    .sh-dot-orange { background: var(--c-orange); }
+    .sh-dot-red    { background: var(--c-red); }
+    .sh-dot-purple { background: var(--c-purple); }
+    .shift-summary {
+      margin-top: 10px;
+      font-size: .85rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 12px;
+      line-height: 1.8;
+    }
+
     #best-windows {
       border: 1px solid var(--border);
       border-radius: var(--radius);
@@ -390,6 +442,30 @@
   <div id="best-windows" style="display:none">
     <div class="section-heading">Best Times to Work Outdoors</div>
     <div id="best-windows-body"></div>
+  </div>
+
+  <!-- Shift planner -->
+  <div id="shift-planner" style="display:none">
+    <div class="section-heading">Plan My Shift</div>
+    <div class="shift-controls">
+      <div class="control-group">
+        <label for="shift-day">Day</label>
+        <select id="shift-day">
+          <option value="today">Today</option>
+          <option value="tomorrow">Tomorrow</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="shift-start">Start</label>
+        <input type="time" id="shift-start" value="08:00" />
+      </div>
+      <div class="control-group">
+        <label for="shift-end">End</label>
+        <input type="time" id="shift-end" value="17:00" />
+      </div>
+    </div>
+    <ul class="shift-hours" id="shift-hours"></ul>
+    <div class="shift-summary" id="shift-summary"></div>
   </div>
 
   <!-- WhatsApp share -->
@@ -609,18 +685,22 @@ function bestWindow(hours, workload, acclimatized, inSun, targetDay) {
  * @returns {string} raw message string (caller must encodeURIComponent)
  */
 function buildWhatsAppMessage(state) {
-  const { cityName, profileLabel, worstLabel, bestToday, bestTomorrow } = state;
+  const { cityName, profileLabel, worstLabel, bestToday, _shiftSummary } = state;
   const today = formatDay(new Date());
   const bw = bestToday ? `${bestToday.startLabel}–${bestToday.endLabel}` : 'No safe window found';
-  return [
+  const lines = [
     `🌡 HeatSense heat alert — ${cityName}, ${today}`,
     `Profile: ${profileLabel}`,
     `⚠ Peak risk: ${worstLabel}`,
     `✅ Best time today: ${bw}`,
+  ];
+  if (_shiftSummary) lines.push(_shiftSummary);
+  lines.push(
     `💧 Drink 1 cup of water every 15–20 min.`,
     `🚨 Heat stroke signs (confusion, collapse, hot skin) → call 999.`,
     `Check your area: ${window.location.href}`,
-  ].join('\n');
+  );
+  return lines.join('\n');
 }
 
 // ── Formatting helpers ─────────────────────────────────────────
@@ -640,6 +720,72 @@ function formatDay(date) {
 
 function dateStr(isoTime) {
   return isoTime.slice(0, 10);
+}
+
+// ── URL state ─────────────────────────────────────────────────
+
+const CITY_KEYS = {
+  penang:   { lat: 5.4141,  lon: 100.3288, name: 'Penang (George Town)' },
+  kl:       { lat: 3.1390,  lon: 101.6869, name: 'Kuala Lumpur' },
+  jb:       { lat: 1.4927,  lon: 103.7414, name: 'Johor Bahru' },
+  kk:       { lat: 5.9804,  lon: 116.0735, name: 'Kota Kinabalu' },
+  kuching:  { lat: 1.5533,  lon: 110.3592, name: 'Kuching' },
+  sg:       { lat: 1.3521,  lon: 103.8198, name: 'Singapore' },
+};
+// Reverse map: "5.4141,100.3288" → "penang"
+const CITY_KEY_BY_VALUE = {};
+Object.entries(CITY_KEYS).forEach(([k, v]) => { CITY_KEY_BY_VALUE[`${v.lat},${v.lon}`] = k; });
+
+function updateURL() {
+  const p = new URLSearchParams();
+  const cityKey = CITY_KEY_BY_VALUE[`${state.lat},${state.lon}`];
+  if (cityKey) p.set('city', cityKey);
+  else { p.set('lat', state.lat); p.set('lon', state.lon); }
+  p.set('profile', state.profile);
+  p.set('acc', state.acclimatized ? '1' : '0');
+  p.set('sun', state.inSun ? '1' : '0');
+  p.set('sday', document.getElementById('shift-day').value);
+  p.set('sstart', document.getElementById('shift-start').value);
+  p.set('send', document.getElementById('shift-end').value);
+  history.replaceState(null, '', '?' + p.toString());
+}
+
+function readURL() {
+  const p = new URLSearchParams(window.location.search);
+  // location
+  const cityKey = p.get('city');
+  if (cityKey && CITY_KEYS[cityKey]) {
+    const c = CITY_KEYS[cityKey];
+    state.lat = c.lat; state.lon = c.lon; state.cityName = c.name;
+    // sync dropdown
+    const sel = document.getElementById('location-select');
+    const opt = [...sel.options].find(o => o.text === c.name);
+    if (opt) sel.value = opt.value;
+  } else if (p.get('lat') && p.get('lon')) {
+    state.lat = parseFloat(p.get('lat'));
+    state.lon = parseFloat(p.get('lon'));
+    state.cityName = 'My Location';
+  }
+  // profile
+  const prof = p.get('profile');
+  if (prof && PROFILES[prof]) {
+    state.profile = prof;
+    document.getElementById('profile-select').value = prof;
+  }
+  // acc
+  if (p.has('acc')) {
+    state.acclimatized = p.get('acc') === '1';
+    document.getElementById('acclimatized-toggle').checked = state.acclimatized;
+  }
+  // sun
+  if (p.has('sun')) {
+    state.inSun = p.get('sun') === '1';
+    document.getElementById('sun-toggle').checked = state.inSun;
+  }
+  // shift
+  if (p.get('sday')) document.getElementById('shift-day').value = p.get('sday');
+  if (p.get('sstart')) document.getElementById('shift-start').value = p.get('sstart');
+  if (p.get('send')) document.getElementById('shift-end').value = p.get('send');
 }
 
 // ── State ──────────────────────────────────────────────────────
@@ -709,7 +855,9 @@ function render() {
   renderRightNow();
   renderTimeline();
   renderBestWindows();
+  renderShiftPlanner();
   renderShare();
+  updateURL();
 }
 
 // ── Right-now card ─────────────────────────────────────────────
@@ -854,6 +1002,7 @@ function showLoading() {
   el.innerHTML = '<p>Loading forecast…</p>';
   document.getElementById('timeline-section').style.display = 'none';
   document.getElementById('best-windows').style.display = 'none';
+  document.getElementById('shift-planner').style.display = 'none';
   document.getElementById('share-section').style.display = 'none';
 }
 
@@ -867,6 +1016,69 @@ function showError(msg) {
     </div>
   `;
   document.getElementById('retry-btn').addEventListener('click', fetchForecast);
+}
+
+// ── Shift planner render ───────────────────────────────────────
+
+function renderShiftPlanner() {
+  const el = document.getElementById('shift-planner');
+  const listEl = document.getElementById('shift-hours');
+  const summaryEl = document.getElementById('shift-summary');
+  const { hours, currentIdx, profile, acclimatized, inSun } = state;
+  if (!hours.length) { el.style.display = 'none'; return; }
+
+  const dayVal   = document.getElementById('shift-day').value;
+  const startVal = document.getElementById('shift-start').value; // "HH:MM"
+  const endVal   = document.getElementById('shift-end').value;
+
+  const today    = hours[currentIdx]?.date;
+  const tomorrow = hours.find(h => h.date > today)?.date;
+  const targetDate = dayVal === 'tomorrow' ? tomorrow : today;
+  if (!targetDate) { el.style.display = 'none'; return; }
+
+  const [startH] = startVal.split(':').map(Number);
+  const [endH]   = endVal.split(':').map(Number);
+  if (endH <= startH) { summaryEl.innerHTML = '⚠ End time must be after start time.'; listEl.innerHTML = ''; el.style.display = ''; return; }
+
+  const shiftHours = hours.filter(h => {
+    if (h.date !== targetDate) return false;
+    const hh = new Date(h.time).getHours();
+    return hh >= startH && hh < endH;
+  });
+
+  if (!shiftHours.length) { summaryEl.innerHTML = 'No forecast data for this shift window.'; listEl.innerHTML = ''; el.style.display = ''; return; }
+
+  const EMOJI = { green: '🟢', yellow: '🟡', orange: '🟠', red: '🔴', purple: '🟣' };
+  let totalRestMins = 0;
+  const shiftDurationMins = shiftHours.length * 60;
+
+  listEl.innerHTML = shiftHours.map(h => {
+    const c = h.classification;
+    const restPerHour = { green: 0, yellow: 15, orange: 30, red: 45, purple: 60 }[c.key];
+    totalRestMins += restPerHour;
+    const hh = new Date(h.time).getHours();
+    const timeLabel = hh === 0 ? '12am' : hh < 12 ? `${hh}am` : hh === 12 ? '12pm' : `${hh-12}pm`;
+    return `<li>
+      <span class="sh-time">${timeLabel}</span>
+      <span class="sh-dot sh-dot-${c.key}"></span>
+      <span>${EMOJI[c.key]} ${c.label}</span>
+    </li>`;
+  }).join('');
+
+  const totalWorkMins = shiftDurationMins - totalRestMins;
+  const cups = Math.ceil(shiftDurationMins / 20);
+  const waterLitres = (cups * 0.25).toFixed(1);
+
+  summaryEl.innerHTML = `
+    <strong>Shift summary</strong> — ${startVal}–${endVal}, ${shiftHours.length}h<br>
+    🛑 Rest needed: ~${totalRestMins} min &nbsp;|&nbsp; 💪 Active work: ~${totalWorkMins} min<br>
+    💧 Drink at least ${cups} cups (${waterLitres} L) over the shift
+  `;
+
+  // Store shift summary on state for WhatsApp
+  state._shiftSummary = `📅 Shift ${startVal}–${endVal}: ~${totalRestMins}min rest needed, drink ${cups} cups (${waterLitres}L)`;
+
+  el.style.display = '';
 }
 
 // ── Controls wiring ────────────────────────────────────────────
@@ -916,6 +1128,15 @@ document.getElementById('sun-toggle').addEventListener('change', function () {
   render();
 });
 
+// Shift planner controls
+['shift-day', 'shift-start', 'shift-end'].forEach(id => {
+  document.getElementById(id).addEventListener('change', function () {
+    renderShiftPlanner();
+    renderShare();
+    updateURL();
+  });
+});
+
 // ── Sanity checks ─────────────────────────────────────────────
 // Run in console to verify math; results printed regardless
 (function runSanityChecks() {
@@ -945,6 +1166,7 @@ document.getElementById('sun-toggle').addEventListener('change', function () {
 })();
 
 // ── Boot ────────────────────────────────────────────────────────
+readURL();
 fetchForecast();
 </script>
 </body>
