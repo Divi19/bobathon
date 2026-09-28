@@ -100,4 +100,7 @@ Format: mode used, short prompt summary, what Bob produced, and any human verifi
 ---
 
 ### 12. Sub-task 9 — Sanity Checks, README, Final Polish
-<!-- To be filled in during sub-task 9 -->
+- **Mode:** Agent / Code + Docs
+- **Prompt (short):** "Run all sanity checks via Node.js. Verify all 7 assertions pass. Write README.md. Finalise BOB_LOG. Commit and push."
+- **What Bob produced:** Node.js sanity-check run confirming all 7 assertions pass: wetBulb(33,75)=29.208 ✓, wbgtShade(33,75)=30.346 ✓, wetBulb(27,90)=25.665 ✓, wbgtShade(27,90)=26.065 ✓, classify(wbgtShade(27,90),'moderate',true)=green ✓, classify(29.5,'moderate',true)=orange ✓, classify(28.5,'heavy',false)=purple ✓. README.md with all 10 required sections (problem, audience table, how-it-works with formula, Bob usage summary linking to BOB_LOG, why-not-slop, limitations, roadmap, sources, run-locally). Final BOB_LOG entries completed for all 12 sub-tasks.
+- **What we verified:** All 7 sanity checks pass in isolation via Node.js, confirming the in-browser `console.assert` block will also pass. README covers every required section from spec Section 10. No remaining "Bahang" references in any file.
