@@ -940,15 +940,16 @@ function renderBestWindows() {
   const body = document.getElementById('best-windows-body');
   const { hours, currentIdx, profile, acclimatized, inSun } = state;
   const { workload } = PROFILES[profile];
+  const upcoming = hours.slice(currentIdx); // only upcoming hours
 
   const today    = hours[currentIdx]?.date;
   const tomorrow = hours.find(h => h.date > today)?.date;
 
-  function windowRow(date, label) {
-    const bw = date ? bestWindow(hours, workload, acclimatized, inSun, date) : null;
+  function windowRow(date, label, isToday) {
+    const bw = date ? bestWindow(upcoming, workload, acclimatized, inSun, date) : null;
     let windowText;
     if (!bw) {
-      windowText = 'No safe window found';
+      windowText = isToday ? 'Daylight over — see tomorrow' : 'No safe window found';
     } else {
       const levelLabel = bw.levelKey.charAt(0).toUpperCase() + bw.levelKey.slice(1);
       windowText = `${bw.startLabel}–${bw.endLabel} <span class="rn-badge level-${bw.levelKey}" style="font-size:.72rem;padding:2px 8px">${levelLabel}</span>`;
@@ -957,8 +958,8 @@ function renderBestWindows() {
   }
 
   body.innerHTML =
-    windowRow(today, 'Today') +
-    windowRow(tomorrow, 'Tomorrow');
+    windowRow(today, 'Today', true) +
+    windowRow(tomorrow, 'Tomorrow', false);
 
   el.style.display = '';
 }
@@ -970,22 +971,24 @@ function renderShare() {
   const link    = document.getElementById('wa-share');
   const { hours, currentIdx, profile, acclimatized, inSun, cityName } = state;
   const { workload, label: profileLabel } = PROFILES[profile];
+  const upcoming = hours.slice(currentIdx); // only upcoming hours
 
   // Worst level in next 12 daytime hours
-  const upcoming = hours.slice(currentIdx, currentIdx + 12).filter(h => h.isDay === 1);
-  const worst    = upcoming.reduce((w, h) => h.classification.level > w.level ? h.classification : w, { level: -1, label: 'N/A' });
+  const next12 = hours.slice(currentIdx, currentIdx + 12).filter(h => h.isDay === 1);
+  const worst  = next12.reduce((w, h) => h.classification.level > w.level ? h.classification : w, { level: -1, label: 'N/A' });
 
   const today    = hours[currentIdx]?.date;
   const tomorrow = hours.find(h => h.date > today)?.date;
-  const bwToday  = today ? bestWindow(hours, workload, acclimatized, inSun, today) : null;
-  const bwTomorrow = tomorrow ? bestWindow(hours, workload, acclimatized, inSun, tomorrow) : null;
+  const bwToday    = today    ? bestWindow(upcoming, workload, acclimatized, inSun, today)    : null;
+  const bwTomorrow = tomorrow ? bestWindow(upcoming, workload, acclimatized, inSun, tomorrow) : null;
 
   const msg = buildWhatsAppMessage({
     cityName,
     profileLabel,
-    worstLabel:  worst.label,
-    bestToday:   bwToday,
+    worstLabel:   worst.label,
+    bestToday:    bwToday,
     bestTomorrow: bwTomorrow,
+    _shiftSummary: state._shiftSummary,
   });
 
   link.href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
