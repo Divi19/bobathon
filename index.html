@@ -829,12 +829,10 @@ function parseForecast(data) {
     isDay:    is_day[i],
     wbgtVal:  null, // computed in render
   }));
-  // Find current hour (nearest past hour)
-  const now = new Date();
-  const nowRounded = new Date(now);
-  nowRounded.setMinutes(0, 0, 0);
-  const nowISO = nowRounded.toISOString().slice(0, 16);
-  const idx = state.hours.findIndex(h => h.time === nowISO);
+  // Find current hour using location-local time (not browser UTC)
+  const offsetMs = (data.utc_offset_seconds || 0) * 1000;
+  const nowLocalISO = new Date(Date.now() + offsetMs).toISOString().slice(0, 13) + ':00';
+  const idx = state.hours.findIndex(h => h.time === nowLocalISO);
   state.currentIdx = idx >= 0 ? idx : 0;
 }
 
