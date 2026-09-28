@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HeatSense — Know when the heat becomes dangerous</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --surface: #f7f8fa;
+      --border: #e5e7eb;
+      --text: #1f2328;
+      --muted: #57606a;
+      --accent: #3b82d4;
+      --c-green:  #16a34a;
+      --c-yellow: #ca8a04;
+      --c-orange: #ea580c;
+      --c-red:    #dc2626;
+      --c-purple: #7c3aed;
+      --c-green-bg:  #dcfce7;
+      --c-yellow-bg: #fef9c3;
+      --c-orange-bg: #ffedd5;
+      --c-red-bg:    #fee2e2;
+      --c-purple-bg: #ede9fe;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+
+    body {
+      font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      min-width: 360px;
+    }
+
+    /* ── Layout ─────────────────────────────────────── */
+    .page { max-width: 680px; margin: 0 auto; padding: 16px 16px 48px; }
+
+    /* ── Header ─────────────────────────────────────── */
+    header {
+      padding: 20px 0 16px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.01em; }
+    header h1 span.emoji { margin-right: 4px; }
+    header p.tagline { color: var(--muted); font-size: .9rem; margin-top: 2px; }
+
+    /* ── Controls card ──────────────────────────────── */
+    .controls-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-bottom: 12px;
+    }
+    .controls-row:last-child { margin-bottom: 0; }
+    .control-group { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; }
+    .control-group label { font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    select, button.geo-btn {
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: .92rem;
+      padding: 0 10px;
+      cursor: pointer;
+      width: 100%;
+    }
+    select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    button.geo-btn {
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 500;
+      white-space: nowrap;
+      flex: 0 0 auto;
+      width: auto;
+      padding: 0 14px;
+    }
+    button.geo-btn:hover { background: var(--surface); }
+
+    /* Toggle row */
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+    }
+    .toggle-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .88rem;
+      color: var(--text);
+    }
+    .toggle-item input[type="checkbox"] {
+      width: 16px; height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* ── Section headings ───────────────────────────── */
+    .section-heading {
+      font-size: .75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── Right-now card ─────────────────────────────── */
+    #right-now {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      background: var(--bg);
+      box-shadow: var(--shadow);
+    }
+    #right-now.loading, #right-now.error {
+      text-align: center;
+      padding: 36px 20px;
+      color: var(--muted);
+    }
+    .rn-badge {
+      display: inline-block;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: .85rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 10px;
+    }
+    .rn-wbgt { font-size: 2.2rem; font-weight: 800; line-height: 1.1; margin-bottom: 4px; }
+    .rn-label { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .rn-contrast { font-size: .88rem; color: var(--muted); margin-bottom: 6px; }
+    .rn-stats { display: flex; gap: 20px; font-size: .85rem; color: var(--muted); margin-bottom: 10px; }
+    .rn-hydration { font-size: .85rem; background: #eff6ff; border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 4px; }
+
+    /* ── Colour helpers ─────────────────────────────── */
+    .level-green  { color: var(--c-green);  background: var(--c-green-bg); }
+    .level-yellow { color: var(--c-yellow); background: var(--c-yellow-bg); }
+    .level-orange { color: var(--c-orange); background: var(--c-orange-bg); }
+    .level-red    { color: var(--c-red);    background: var(--c-red-bg); }
+    .level-purple { color: var(--c-purple); background: var(--c-purple-bg); }
+
+    .border-green  { border-left: 4px solid var(--c-green); }
+    .border-yellow { border-left: 4px solid var(--c-yellow); }
+    .border-orange { border-left: 4px solid var(--c-orange); }
+    .border-red    { border-left: 4px solid var(--c-red); }
+    .border-purple { border-left: 4px solid var(--c-purple); }
+
+    /* ── Timeline ────────────────────────────────────── */
+    #timeline-section { margin-bottom: 20px; }
+    .timeline-scroll {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      scrollbar-width: thin;
+    }
+    .timeline-scroll::-webkit-scrollbar { height: 4px; }
+    .timeline-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .tl-cell {
+      flex: 0 0 52px;
+      min-width: 52px;
+      border-radius: 6px;
+      padding: 8px 4px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      font-size: .75rem;
+      transition: transform .1s;
+      border: 2px solid transparent;
+    }
+    .tl-cell:hover, .tl-cell.active { transform: translateY(-2px); border-color: var(--text); }
+    .tl-cell .tl-hour { font-weight: 600; display: block; }
+    .tl-cell .tl-wbgt { font-weight: 700; font-size: .85rem; display: block; margin-top: 2px; }
+    .tl-cell .tl-night { font-size: .7rem; display: block; opacity: .7; }
+
+    /* Timeline tooltip */
+    .tl-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--text);
+      color: #fff;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: .78rem;
+      white-space: nowrap;
+      z-index: 10;
+      pointer-events: none;
+      line-height: 1.5;
+    }
+    .tl-tooltip::after {
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--text);
+    }
+    .tl-cell:hover .tl-tooltip,
+    .tl-cell.active .tl-tooltip { display: block; }
+
+    /* ── Best windows ────────────────────────────────── */
+    #best-windows {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 20px;
+      background: var(--surface);
+    }
+    .bw-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .9rem; }
+    .bw-row:last-child { border-bottom: none; }
+    .bw-day { font-weight: 600; }
+    .bw-window { color: var(--muted); font-size: .85rem; }
+
+    /* ── WhatsApp ─────────────────────────────────────── */
+    #share-section { margin-bottom: 20px; }
+    .wa-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 20px;
+      background: #25d366;
+      color: #fff;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s;
+    }
+    .wa-btn:hover { background: #1ebe5d; }
+
+    /* ── How it works (collapsible) ───────────────────── */
+    #how-it-works { margin-bottom: 24px; }
+    details summary {
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 600;
+      color: var(--accent);
+      user-select: none;
+      padding: 8px 0;
+      list-style: none;
+    }
+    details summary::before { content: '▶ '; font-size: .7rem; }
+    details[open] summary::before { content: '▼ '; }
+    details summary::-webkit-details-marker { display: none; }
+    .how-body {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 8px;
+      font-size: .85rem;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .how-body h4 { color: var(--text); font-size: .88rem; margin: 12px 0 4px; }
+    .how-body h4:first-child { margin-top: 0; }
+    .how-body code { background: var(--surface); padding: 1px 5px; border-radius: 3px; font-size: .82rem; font-family: monospace; }
+    .how-body table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: .8rem; }
+    .how-body th, .how-body td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; }
+    .how-body th { background: var(--surface); font-weight: 600; }
+    .how-body a { color: var(--accent); }
+    .limitation-note { background: #fffbeb; border-left: 3px solid #f59e0b; padding: 8px 12px; border-radius: 4px; margin-top: 10px; font-size: .82rem; }
+
+    /* ── Footer ───────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+      font-size: .78rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    footer .disclaimer { margin-bottom: 10px; }
+    footer .built-with { text-align: center; font-size: .75rem; }
+
+    /* ── Error / loading states ───────────────────────── */
+    .state-msg { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .state-msg p { margin-bottom: 14px; }
+    .retry-btn {
+      display: inline-block;
+      padding: 8px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: .9rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .retry-btn:hover { background: #2563eb; }
+
+    /* ── Responsive ───────────────────────────────────── */
+    @media (max-width: 480px) {
+      .controls-row { gap: 8px; }
+      .control-group { flex: 1 1 140px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <header>
+    <h1><span class="emoji">🌡</span>HeatSense</h1>
+    <p class="tagline">Know when the heat becomes dangerous — hour by hour.</p>
+  </header>
+
+  <!-- Controls -->
+  <div class="controls-card">
+    <div class="controls-row">
+      <div class="control-group">
+        <label for="location-select">Location</label>
+        <select id="location-select">
+          <option value="5.4141,100.3288">Penang (George Town)</option>
+          <option value="3.1390,101.6869">Kuala Lumpur</option>
+          <option value="1.4927,103.7414">Johor Bahru</option>
+          <option value="5.9804,116.0735">Kota Kinabalu</option>
+          <option value="1.5533,110.3592">Kuching</option>
+          <option value="1.3521,103.8198">Singapore</option>
+        </select>
+      </div>
+      <button class="geo-btn" id="geo-btn" title="Use my current location">📍 My location</button>
+    </div>
+    <div class="controls-row">
+      <div class="control-group">
+        <label for="profile-select">Profile</label>
+        <select id="profile-select">
+          <option value="rider">Delivery Rider</option>
+          <option value="construction">Construction / Plantation</option>
+          <option value="school">School (PE / Assembly)</option>
+          <option value="runner">Runner / Athlete</option>
+          <option value="elderly">Elderly / Light Outdoor</option>
+          <option value="tourist">Tourist / Hiker</option>
+        </select>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <label class="toggle-item">
+        <input type="checkbox" id="acclimatized-toggle" checked />
+        Used to working in heat (acclimatized)?
+      </label>
+      <label class="toggle-item">
+        <input type="checkbox" id="sun-toggle" checked />
+        Working in direct sun?
+      </label>
+    </div>
+  </div>
+
+  <!-- Right-now card -->
+  <div id="right-now" class="loading">
+    <p>Loading forecast…</p>
+  </div>
+
+  <!-- 48-hour timeline -->
+  <section id="timeline-section" style="display:none">
+    <div class="section-heading">48-Hour Outlook</div>
+    <div class="timeline-scroll" id="timeline"></div>
+  </section>
+
+  <!-- Best windows -->
+  <div id="best-windows" style="display:none">
+    <div class="section-heading">Best Times to Work Outdoors</div>
+    <div id="best-windows-body"></div>
+  </div>
+
+  <!-- WhatsApp share -->
+  <section id="share-section" style="display:none">
+    <a id="wa-share" class="wa-btn" target="_blank" rel="noopener noreferrer">
+      <svg width="20" height="20" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="16" fill="#25d366"/>
+        <path d="M23.5 8.5C21.6 6.6 19.1 5.5 16.4 5.5C10.9 5.5 6.4 10 6.4 15.5C6.4 17.3 6.9 19.1 7.8 20.7L6.3 26.5L12.2 25C13.8 25.8 15.5 26.3 17.3 26.3C22.8 26.3 27.3 21.8 27.3 16.3C27.3 13.6 26.2 11.1 24.3 9.2L23.5 8.5ZM16.4 24.5C14.8 24.5 13.3 24.1 12 23.3L11.7 23.1L8.6 23.9L9.4 20.9L9.2 20.6C8.3 19.2 7.8 17.6 7.8 15.9C7.8 11 11.8 7 16.7 7C19 7 21.2 7.9 22.9 9.6C24.5 11.2 25.5 13.4 25.5 15.7C25.5 20.6 21.3 24.5 16.4 24.5ZM21.3 18.1C21.1 17.9 20 17.4 19.8 17.3C19.6 17.2 19.5 17.2 19.3 17.4C19.2 17.6 18.7 18.1 18.6 18.3C18.5 18.4 18.4 18.4 18.2 18.3C17.5 18 16.8 17.6 16.2 17.1C15.7 16.6 15.2 16.1 14.8 15.5C14.7 15.3 14.8 15.2 14.9 15.1C15 15 15.1 14.8 15.2 14.7C15.3 14.6 15.3 14.5 15.4 14.4C15.5 14.3 15.5 14.2 15.4 14.1C15.3 14 14.9 12.9 14.7 12.5C14.6 12.1 14.4 12.1 14.2 12.1H13.9C13.8 12.1 13.6 12.2 13.4 12.4C13.2 12.6 12.7 13.1 12.7 14.2C12.7 15.3 13.5 16.4 13.6 16.5C13.7 16.7 14.9 18.6 16.8 19.5C18.7 20.4 18.7 20.1 19.1 20C19.5 20 20.4 19.5 20.6 19C20.8 18.5 20.8 18.1 20.7 18L21.3 18.1Z" fill="white"/>
+      </svg>
+      Share to WhatsApp
+    </a>
+  </section>
+
+  <!-- How it works -->
+  <section id="how-it-works">
+    <details>
+      <summary>How it works</summary>
+      <div class="how-body">
+        <h4>Data source</h4>
+        <p>Hourly temperature, humidity, solar radiation and day/night flag from <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (free, no API key, no account required).</p>
+
+        <h4>WBGT calculation (Stull 2011 model)</h4>
+        <p><strong>Step 1 — Wet-bulb temperature</strong> (Stull 2011, angles in radians):<br>
+        <code>Tw = T·atan(0.151977·√(RH+8.313659)) + atan(T+RH) − atan(RH−1.676331) + 0.00391838·RH^1.5·atan(0.023101·RH) − 4.686035</code></p>
+        <p><strong>Step 2 — WBGT shade:</strong> <code>wbgtShade = 0.7·Tw + 0.3·T</code></p>
+        <p><strong>Step 3 — Solar correction (rule-of-thumb estimate):</strong> <code>WBGT = wbgtShade + (inSun &amp;&amp; isDay ? 3·min(radiation/800, 1) : 0)</code></p>
+        <div class="limitation-note">⚠ The solar correction is a simplified estimate. It does not account for cloud cover variation or wind speed. Night-time values (🌙) use shade WBGT only. This tool gives general guidance, not precise occupational measurements.</div>
+
+        <h4>Work/rest thresholds — ACGIH TLV &amp; Action Limit</h4>
+        <table>
+          <tr><th>Level</th><th>Colour</th><th>Work pattern</th></tr>
+          <tr><td>🟢 Green</td><td style="background:var(--c-green-bg)">Normal</td><td>Continuous work</td></tr>
+          <tr><td>🟡 Yellow</td><td style="background:var(--c-yellow-bg)">Caution</td><td>45 min work, 15 min rest</td></tr>
+          <tr><td>🟠 Orange</td><td style="background:var(--c-orange-bg)">Warning</td><td>30 min work, 30 min rest</td></tr>
+          <tr><td>🔴 Red</td><td style="background:var(--c-red-bg)">Danger</td><td>15 min work, 45 min rest</td></tr>
+          <tr><td>🟣 Purple</td><td style="background:var(--c-purple-bg)">Stop</td><td>No strenuous activity</td></tr>
+        </table>
+
+        <h4>Sources</h4>
+        <p>
+          • Stull, R. (2011). Wet-Bulb Temperature from Relative Humidity and Air Temperature. <em>Journal of Applied Meteorology and Climatology.</em><br>
+          • <a href="https://www.osha.gov/otm/section-3-health-hazards/chapter-4" target="_blank" rel="noopener">OSHA Technical Manual, Section III Chapter 4 — Heat Stress</a> (ACGIH TLV/Action Limit table)<br>
+          • <a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Open-Meteo API documentation</a>
+        </p>
+      </div>
+    </details>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p class="disclaimer">HeatSense gives general guidance based on published heat-stress standards and a forecast estimate. It is not medical advice. Follow your employer's safety rules and local authority warnings.</p>
+    <p class="built-with">Built with IBM Bob · HeatSense</p>
+  </footer>
+
+</div><!-- /.page -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// HeatSense — Heat-Safety Planner
+// Vanilla JS, no frameworks, no API keys
+// ═══════════════════════════════════════════════════════════════
+
+// ── Constants ──────────────────────────────────────────────────
+
+const LOCATIONS = {
+  'Penang (George Town)':  { lat: 5.4141,  lon: 100.3288 },
+  'Kuala Lumpur':          { lat: 3.1390,  lon: 101.6869 },
+  'Johor Bahru':           { lat: 1.4927,  lon: 103.7414 },
+  'Kota Kinabalu':         { lat: 5.9804,  lon: 116.0735 },
+  'Kuching':               { lat: 1.5533,  lon: 110.3592 },
+  'Singapore':             { lat: 1.3521,  lon: 103.8198 },
+};
+
+const PROFILES = {
+  rider:        { label: 'Delivery Rider',           workload: 'moderate', acclimatized: true,  inSun: true  },
+  construction: { label: 'Construction / Plantation', workload: 'heavy',    acclimatized: true,  inSun: true  },
+  school:       { label: 'School (PE / Assembly)',    workload: 'moderate', acclimatized: false, inSun: true  },
+  runner:       { label: 'Runner / Athlete',          workload: 'heavy',    acclimatized: false, inSun: true  },
+  elderly:      { label: 'Elderly / Light Outdoor',  workload: 'light',    acclimatized: false, inSun: false },
+  tourist:      { label: 'Tourist / Hiker',           workload: 'moderate', acclimatized: false, inSun: true  },
+};
+
+// THRESHOLDS[acclimatized|unacclimatized][workload][row]
+// Row 0 = 75–100% work → Green
+// Row 1 = 50–75%       → Yellow
+// Row 2 = 25–50%       → Orange
+// Row 3 = 0–25%        → Red
+// null  = not permitted at that row → skip to next
+// Above all non-null   → Purple
+const THRESHOLDS = {
+  acclimatized: {
+    light:     [31.0, 31.0, 32.0, 32.5],
+    moderate:  [28.0, 29.0, 30.0, 31.5],
+    heavy:     [null, 27.5, 29.0, 30.5],
+    veryHeavy: [null, null, 28.0, 30.0],
+  },
+  unacclimatized: {
+    light:     [28.0, 28.5, 29.5, 30.0],
+    moderate:  [25.0, 26.0, 27.0, 29.0],
+    heavy:     [null, 24.0, 25.5, 28.0],
+    veryHeavy: [null, null, 24.5, 27.0],
+  },
+};
+
+const LEVELS = [
+  { key: 'green',  label: 'Normal work. Drink water regularly.',                                       work: 'Continuous',  rest: '—'      },
+  { key: 'yellow', label: 'Work 45 min, rest 15 min in shade.',                                        work: '45 min',      rest: '15 min' },
+  { key: 'orange', label: 'Work 30 min, rest 30 min in shade.',                                        work: '30 min',      rest: '30 min' },
+  { key: 'red',    label: 'Work 15 min, rest 45 min in shade. Essential work only.',                   work: '15 min',      rest: '45 min' },
+  { key: 'purple', label: 'STOP strenuous activity. Danger of heat stroke.',                           work: 'Stop',        rest: 'Full'   },
+];
+
+// ── Pure functions ─────────────────────────────────────────────
+
+/**
+ * Stull (2011) wet-bulb temperature approximation.
+ * All atan arguments are in radians (Math.atan takes radians natively).
+ * @param {number} T  - air temperature °C
+ * @param {number} RH - relative humidity %
+ * @returns {number} wet-bulb temperature °C
+ */
+function wetBulb(T, RH) {
+  return (
+    T * Math.atan(0.151977 * Math.sqrt(RH + 8.313659)) +
+    Math.atan(T + RH) -
+    Math.atan(RH - 1.676331) +
+    0.00391838 * Math.pow(RH, 1.5) * Math.atan(0.023101 * RH) -
+    4.686035
+  );
+}
+
+/**
+ * WBGT in shade: 70% wet-bulb + 30% dry-bulb.
+ * @param {number} T  - air temperature °C
+ * @param {number} RH - relative humidity %
+ * @returns {number} WBGT shade °C
+ */
+function wbgtShade(T, RH) {
+  const Tw = wetBulb(T, RH);
+  return 0.7 * Tw + 0.3 * T;
+}
+
+/**
+ * WBGT with optional solar correction (rule-of-thumb estimate).
+ * @param {number}  T         - air temperature °C
+ * @param {number}  RH        - relative humidity %
+ * @param {number}  radiation - shortwave radiation W/m²
+ * @param {number}  isDay     - 1 = daytime, 0 = night (from Open-Meteo)
+ * @param {boolean} inSun     - user is working in direct sun
+ * @returns {number} WBGT °C, rounded to 1 decimal place
+ */
+function wbgt(T, RH, radiation, isDay, inSun) {
+  const shade = wbgtShade(T, RH);
+  const solarAdj = (inSun && isDay === 1) ? 3 * Math.min(radiation / 800, 1) : 0;
+  return Math.round((shade + solarAdj) * 10) / 10;
+}
+
+/**
+ * Classify a WBGT value against the ACGIH thresholds for a given workload.
+ * @param {number}  wbgtVal      - WBGT °C
+ * @param {string}  workload     - 'light' | 'moderate' | 'heavy' | 'veryHeavy'
+ * @param {boolean} acclimatized
+ * @returns {{ level: number, key: string, label: string, work: string, rest: string }}
+ */
+function classify(wbgtVal, workload, acclimatized) {
+  const setKey = acclimatized ? 'acclimatized' : 'unacclimatized';
+  const rows = THRESHOLDS[setKey][workload];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i] !== null && rows[i] >= wbgtVal) {
+      return { level: i, ...LEVELS[i] };
+    }
+  }
+  return { level: 4, ...LEVELS[4] }; // Purple
+}
+
+/**
+ * Find the longest consecutive daytime block at a given level or better.
+ * Cascades: tries Green first, then Yellow, then Orange, then Red.
+ * @param {Array}   hours        - forecast hour objects
+ * @param {string}  workload
+ * @param {boolean} acclimatized
+ * @param {boolean} inSun
+ * @param {string}  targetDay    - 'YYYY-MM-DD'
+ * @returns {{ startLabel: string, endLabel: string, levelKey: string, hours: number } | null}
+ */
+function bestWindow(hours, workload, acclimatized, inSun, targetDay) {
+  const dayHours = hours.filter(h => h.date === targetDay && h.isDay === 1);
+  if (dayHours.length === 0) return null;
+
+  for (let maxLevel = 0; maxLevel <= 3; maxLevel++) {
+    let best = null, current = null;
+    for (const h of dayHours) {
+      const c = classify(h.wbgtVal, workload, acclimatized);
+      if (c.level <= maxLevel) {
+        if (!current) current = { start: h, end: h, count: 1 };
+        else { current.end = h; current.count++; }
+        if (!best || current.count > best.count) best = { ...current };
+      } else {
+        current = null;
+      }
+    }
+    if (best) {
+      return {
+        startLabel: formatHour(best.start.time),
+        endLabel:   formatHour(best.end.time, true),
+        levelKey:   LEVELS[maxLevel].key,
+        hours:      best.count,
+      };
+    }
+  }
+  return null; // all hours are Red/Purple
+}
+
+/**
+ * Build the WhatsApp share message.
+ * @param {object} state - current app state
+ * @returns {string} raw message string (caller must encodeURIComponent)
+ */
+function buildWhatsAppMessage(state) {
+  const { cityName, profileLabel, worstLabel, bestToday, bestTomorrow } = state;
+  const today = formatDay(new Date());
+  const bw = bestToday ? `${bestToday.startLabel}–${bestToday.endLabel}` : 'No safe window found';
+  return [
+    `🌡 HeatSense heat alert — ${cityName}, ${today}`,
+    `Profile: ${profileLabel}`,
+    `⚠ Peak risk: ${worstLabel}`,
+    `✅ Best time today: ${bw}`,
+    `💧 Drink 1 cup of water every 15–20 min.`,
+    `🚨 Heat stroke signs (confusion, collapse, hot skin) → call 999.`,
+    `Check your area: ${window.location.href}`,
+  ].join('\n');
+}
+
+// ── Formatting helpers ─────────────────────────────────────────
+
+function formatHour(isoTime, isEnd = false) {
+  const d = new Date(isoTime);
+  let h = d.getHours();
+  if (isEnd) h += 1; // end of that hour block
+  if (h === 0 || h === 24) return '12am';
+  if (h === 12) return '12pm';
+  return h < 12 ? `${h}am` : `${h - 12}pm`;
+}
+
+function formatDay(date) {
+  return date.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+function dateStr(isoTime) {
+  return isoTime.slice(0, 10);
+}
+
+// ── State ──────────────────────────────────────────────────────
+
+let state = {
+  lat: 5.4141,
+  lon: 100.3288,
+  cityName: 'Penang (George Town)',
+  profile: 'rider',
+  acclimatized: true,
+  inSun: true,
+  hours: [],         // parsed forecast
+  currentIdx: -1,    // index of current hour in hours[]
+};
+
+// ── Open-Meteo fetch ───────────────────────────────────────────
+
+async function fetchForecast() {
+  showLoading();
+  const { lat, lon } = state;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,relative_humidity_2m,shortwave_radiation,is_day&timezone=Asia%2FKuala_Lumpur&forecast_days=3`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    parseForecast(data);
+    render();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+function parseForecast(data) {
+  const { time, temperature_2m, relative_humidity_2m, shortwave_radiation, is_day } = data.hourly;
+  state.hours = time.map((t, i) => ({
+    time:     t,
+    date:     t.slice(0, 10),
+    T:        temperature_2m[i],
+    RH:       relative_humidity_2m[i],
+    radiation: shortwave_radiation[i],
+    isDay:    is_day[i],
+    wbgtVal:  null, // computed in render
+  }));
+  // Find current hour (nearest past hour)
+  const now = new Date();
+  const nowRounded = new Date(now);
+  nowRounded.setMinutes(0, 0, 0);
+  const nowISO = nowRounded.toISOString().slice(0, 16);
+  const idx = state.hours.findIndex(h => h.time === nowISO);
+  state.currentIdx = idx >= 0 ? idx : 0;
+}
+
+// ── Render ─────────────────────────────────────────────────────
+
+function render() {
+  if (!state.hours.length) return;
+
+  const { acclimatized, inSun, profile } = state;
+  const { workload } = PROFILES[profile];
+
+  // Compute WBGT for every hour
+  state.hours.forEach(h => {
+    h.wbgtVal = wbgt(h.T, h.RH, h.radiation, h.isDay, inSun);
+    h.classification = classify(h.wbgtVal, workload, acclimatized);
+  });
+
+  renderRightNow();
+  renderTimeline();
+  renderBestWindows();
+  renderShare();
+}
+
+// ── Right-now card ─────────────────────────────────────────────
+
+function renderRightNow() {
+  const el = document.getElementById('right-now');
+  const h = state.hours[state.currentIdx];
+  if (!h) { el.innerHTML = '<p>No data for current hour.</p>'; return; }
+
+  const c = h.classification;
+  const levelClass = `level-${c.key}`;
+  const borderClass = `border-${c.key}`;
+
+  el.className = ''; // clear loading/error classes
+  el.style.borderLeft = ''; // reset
+
+  el.innerHTML = `
+    <span class="rn-badge ${levelClass}">${c.key.toUpperCase()}</span>
+    <div class="rn-wbgt">${h.wbgtVal.toFixed(1)}°C <span style="font-size:1rem;font-weight:400;color:var(--muted)">WBGT</span></div>
+    <div class="rn-label">${c.label}</div>
+    <div class="rn-stats">
+      <span>🌡 ${h.T.toFixed(1)}°C air</span>
+      <span>💧 ${h.RH}% humidity</span>
+      ${h.isDay === 1 ? `<span>☀ ${Math.round(h.radiation)} W/m²</span>` : '<span>🌙 Night</span>'}
+    </div>
+    <div class="rn-contrast">Air temp ${h.T.toFixed(1)}°C may feel manageable — but heat stress is in the <strong>${c.key.toUpperCase()}</strong> zone.</div>
+    <div class="rn-hydration">💧 Drink about 1 cup (250 ml) of water every 15–20 minutes when working in heat — even if not thirsty.</div>
+  `;
+  // Colour left border on the card
+  el.style.borderLeft = `4px solid var(--c-${c.key})`;
+}
+
+// ── Timeline ────────────────────────────────────────────────────
+
+function renderTimeline() {
+  const section = document.getElementById('timeline-section');
+  const container = document.getElementById('timeline');
+  const slice = state.hours.slice(state.currentIdx, state.currentIdx + 48);
+
+  container.innerHTML = '';
+  slice.forEach((h, i) => {
+    const c = h.classification;
+    const cell = document.createElement('div');
+    cell.className = `tl-cell level-${c.key}`;
+    cell.setAttribute('tabindex', '0');
+    cell.setAttribute('role', 'button');
+    cell.setAttribute('aria-label', `${formatHour(h.time)}: WBGT ${h.wbgtVal}°C – ${c.label}`);
+
+    const hourLabel = formatHour(h.time);
+    const nightTag  = h.isDay === 0 ? '<span class="tl-night">🌙</span>' : '';
+
+    cell.innerHTML = `
+      <span class="tl-hour">${hourLabel}</span>
+      <span class="tl-wbgt">${h.wbgtVal.toFixed(1)}°</span>
+      ${nightTag}
+      <div class="tl-tooltip">
+        <strong>${formatHour(h.time)}</strong><br>
+        WBGT: ${h.wbgtVal.toFixed(1)}°C<br>
+        Air: ${h.T.toFixed(1)}°C · RH: ${h.RH}%<br>
+        ${c.label}
+      </div>
+    `;
+
+    // Keyboard accessibility
+    cell.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        cell.classList.toggle('active');
+      }
+    });
+
+    container.appendChild(cell);
+  });
+
+  section.style.display = '';
+}
+
+// ── Best windows ───────────────────────────────────────────────
+
+function renderBestWindows() {
+  const el = document.getElementById('best-windows');
+  const body = document.getElementById('best-windows-body');
+  const { hours, currentIdx, profile, acclimatized, inSun } = state;
+  const { workload } = PROFILES[profile];
+
+  const today    = hours[currentIdx]?.date;
+  const tomorrow = hours.find(h => h.date > today)?.date;
+
+  function windowRow(date, label) {
+    const bw = date ? bestWindow(hours, workload, acclimatized, inSun, date) : null;
+    let windowText;
+    if (!bw) {
+      windowText = 'No safe window found';
+    } else {
+      const levelLabel = bw.levelKey.charAt(0).toUpperCase() + bw.levelKey.slice(1);
+      windowText = `${bw.startLabel}–${bw.endLabel} <span class="rn-badge level-${bw.levelKey}" style="font-size:.72rem;padding:2px 8px">${levelLabel}</span>`;
+    }
+    return `<div class="bw-row"><span class="bw-day">${label}</span><span class="bw-window">${windowText}</span></div>`;
+  }
+
+  body.innerHTML =
+    windowRow(today, 'Today') +
+    windowRow(tomorrow, 'Tomorrow');
+
+  el.style.display = '';
+}
+
+// ── WhatsApp share ─────────────────────────────────────────────
+
+function renderShare() {
+  const section = document.getElementById('share-section');
+  const link    = document.getElementById('wa-share');
+  const { hours, currentIdx, profile, acclimatized, inSun, cityName } = state;
+  const { workload, label: profileLabel } = PROFILES[profile];
+
+  // Worst level in next 12 daytime hours
+  const upcoming = hours.slice(currentIdx, currentIdx + 12).filter(h => h.isDay === 1);
+  const worst    = upcoming.reduce((w, h) => h.classification.level > w.level ? h.classification : w, { level: -1, label: 'N/A' });
+
+  const today    = hours[currentIdx]?.date;
+  const tomorrow = hours.find(h => h.date > today)?.date;
+  const bwToday  = today ? bestWindow(hours, workload, acclimatized, inSun, today) : null;
+  const bwTomorrow = tomorrow ? bestWindow(hours, workload, acclimatized, inSun, tomorrow) : null;
+
+  const msg = buildWhatsAppMessage({
+    cityName,
+    profileLabel,
+    worstLabel:  worst.label,
+    bestToday:   bwToday,
+    bestTomorrow: bwTomorrow,
+  });
+
+  link.href = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  section.style.display = '';
+}
+
+// ── Loading / error states ─────────────────────────────────────
+
+function showLoading() {
+  const el = document.getElementById('right-now');
+  el.className = 'loading';
+  el.innerHTML = '<p>Loading forecast…</p>';
+  document.getElementById('timeline-section').style.display = 'none';
+  document.getElementById('best-windows').style.display = 'none';
+  document.getElementById('share-section').style.display = 'none';
+}
+
+function showError(msg) {
+  const el = document.getElementById('right-now');
+  el.className = 'error';
+  el.innerHTML = `
+    <div class="state-msg">
+      <p>⚠ Couldn't load forecast. Check your connection and try again.<br><small style="color:var(--muted)">${msg}</small></p>
+      <button class="retry-btn" id="retry-btn">Retry</button>
+    </div>
+  `;
+  document.getElementById('retry-btn').addEventListener('click', fetchForecast);
+}
+
+// ── Controls wiring ────────────────────────────────────────────
+
+document.getElementById('location-select').addEventListener('change', function () {
+  const [lat, lon] = this.value.split(',').map(Number);
+  const name = this.options[this.selectedIndex].text;
+  state.lat = lat;
+  state.lon = lon;
+  state.cityName = name;
+  fetchForecast();
+});
+
+document.getElementById('geo-btn').addEventListener('click', () => {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      state.lat = pos.coords.latitude;
+      state.lon = pos.coords.longitude;
+      state.cityName = 'My Location';
+      // Deselect preset dropdown
+      const sel = document.getElementById('location-select');
+      sel.selectedIndex = -1;
+      fetchForecast();
+    },
+    () => { /* silently fall back to current state */ }
+  );
+});
+
+document.getElementById('profile-select').addEventListener('change', function () {
+  const p = PROFILES[this.value];
+  state.profile = this.value;
+  state.acclimatized = p.acclimatized;
+  state.inSun = p.inSun;
+  document.getElementById('acclimatized-toggle').checked = p.acclimatized;
+  document.getElementById('sun-toggle').checked = p.inSun;
+  render();
+});
+
+document.getElementById('acclimatized-toggle').addEventListener('change', function () {
+  state.acclimatized = this.checked;
+  render();
+});
+
+document.getElementById('sun-toggle').addEventListener('change', function () {
+  state.inSun = this.checked;
+  render();
+});
+
+// ── Sanity checks ─────────────────────────────────────────────
+// Run in console to verify math; results printed regardless
+(function runSanityChecks() {
+  const wb33  = wetBulb(33, 75);
+  const ws33  = wbgtShade(33, 75);
+  const wb27  = wetBulb(27, 90);
+  const ws27  = wbgtShade(27, 90);
+  const c1    = classify(29.5, 'moderate', true);
+  const c2    = classify(28.5, 'heavy', false);
+
+  console.group('HeatSense sanity checks');
+  console.assert(Math.abs(wb33 - 29.2) < 0.3, `wetBulb(33,75) expected ≈29.2, got ${wb33.toFixed(2)}`);
+  console.assert(Math.abs(ws33 - 30.3) < 0.3, `wbgtShade(33,75) expected ≈30.3, got ${ws33.toFixed(2)}`);
+  console.assert(Math.abs(wb27 - 25.8) < 0.4, `wetBulb(27,90) expected ≈25.8, got ${wb27.toFixed(2)}`);
+  console.assert(Math.abs(ws27 - 26.2) < 0.4, `wbgtShade(27,90) expected ≈26.2, got ${ws27.toFixed(2)}`);
+  console.assert(classify(ws27, 'moderate', true).key === 'green', `wbgtShade(27,90) moderate acclimatized should be green, got ${classify(ws27,'moderate',true).key}`);
+  console.assert(c1.key === 'orange', `classify(29.5,'moderate',true) expected orange, got ${c1.key}`);
+  console.assert(c2.key === 'purple', `classify(28.5,'heavy',false) expected purple, got ${c2.key}`);
+
+  console.log(`wetBulb(33,75) = ${wb33.toFixed(2)} (expect ≈29.2) ${Math.abs(wb33-29.2)<0.3?'✓':'✗'}`);
+  console.log(`wbgtShade(33,75) = ${ws33.toFixed(2)} (expect ≈30.3) ${Math.abs(ws33-30.3)<0.3?'✓':'✗'}`);
+  console.log(`wetBulb(27,90) = ${wb27.toFixed(2)} (expect ≈25.8) ${Math.abs(wb27-25.8)<0.4?'✓':'✗'}`);
+  console.log(`wbgtShade(27,90) = ${ws27.toFixed(2)} (expect ≈26.2) ${Math.abs(ws27-26.2)<0.4?'✓':'✗'}`);
+  console.log(`classify(29.5,'moderate',true) = ${c1.key} (expect orange) ${c1.key==='orange'?'✓':'✗'}`);
+  console.log(`classify(28.5,'heavy',false) = ${c2.key} (expect purple) ${c2.key==='purple'?'✓':'✗'}`);
+  console.groupEnd();
+})();
+
+// ── Boot ────────────────────────────────────────────────────────
+fetchForecast();
+</script>
+</body>
+</html>
