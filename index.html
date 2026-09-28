@@ -685,15 +685,17 @@ function bestWindow(hours, workload, acclimatized, inSun, targetDay) {
  * @returns {string} raw message string (caller must encodeURIComponent)
  */
 function buildWhatsAppMessage(state) {
-  const { cityName, profileLabel, worstLabel, bestToday, _shiftSummary } = state;
+  const { cityName, profileLabel, worstLabel, bestToday, bestTomorrow, _shiftSummary } = state;
   const today = formatDay(new Date());
-  const bw = bestToday ? `${bestToday.startLabel}–${bestToday.endLabel}` : 'No safe window found';
+  const bwTodayText    = bestToday    ? `${bestToday.startLabel}–${bestToday.endLabel}`    : 'daylight over';
+  const bwTomorrowText = bestTomorrow ? `${bestTomorrow.startLabel}–${bestTomorrow.endLabel}` : null;
   const lines = [
     `🌡 HeatSense heat alert — ${cityName}, ${today}`,
     `Profile: ${profileLabel}`,
     `⚠ Peak risk: ${worstLabel}`,
-    `✅ Best time today: ${bw}`,
+    `✅ Best time today: ${bwTodayText}`,
   ];
+  if (bwTomorrowText) lines.push(`✅ Best time tomorrow: ${bwTomorrowText}`);
   if (_shiftSummary) lines.push(_shiftSummary);
   lines.push(
     `💧 Drink 1 cup of water every 15–20 min.`,
